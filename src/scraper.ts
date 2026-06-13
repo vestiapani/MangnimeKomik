@@ -26,7 +26,11 @@ async function fetchAPI(path: string): Promise<any> {
   if (!res.ok) throw new Error(`HTTP ${res.status} — ${path}`);
   return await res.json();
 }
-const normalizeCard = (d: any) => {
+
+// ✅ FIX: Fungsi normalizeCard dikembalikan seperti versi Deno yang tahan banting
+const normalizeCard = (item: any) => {
+  const d = item.data?.title ? item.data : item.data?.data || item.data || item;
+
   let chapterText = "";
   if (d.chapters && d.chapters.length > 0) {
     const firstCh = d.chapters[0].data || d.chapters[0];
@@ -205,4 +209,14 @@ export async function getGenreList() {
       description: g.data?.description || g.description,
     },
   }));
+}
+
+export async function getKomikByGenre(genreSlug: string, page = 1, take = 12) {
+  const data = await fetchAPI(
+    `/series?genreIds=${genreSlug}&sort=latest&sortOrder=desc&take=${take}&page=${page}`,
+  );
+  return {
+    data: (data?.data || []).map(normalizeCard),
+    meta: data?.meta || { page, lastPage: 50 },
+  };
 }

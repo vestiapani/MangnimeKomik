@@ -1,3 +1,21 @@
+const USER_AGENTS = [
+  // Windows
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0",
+  // macOS
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:126.0) Gecko/20100101 Firefox/126.0",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
+  // Mobile (Android & iOS)
+  "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36",
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
+];
+
+function getRandomUserAgent() {
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+}
+
 const BE = "https://be.komikcast.cc";
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -6,18 +24,19 @@ function getRandomIP() {
   return `${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
 }
 
+// ---  fungsi fetchAPI ---
 async function fetchAPI(path: string): Promise<any> {
   await delay(1000);
 
   const fakeIP = getRandomIP();
+  const randomUA = getRandomUserAgent();
 
   const res = await fetch(`${BE}${path}`, {
     headers: {
       Origin: "https://v2.komikcast.fit",
       Referer: "https://v2.komikcast.fit/",
       Accept: "application/json, text/plain, */*",
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+      "User-Agent": randomUA,
       "X-Forwarded-For": fakeIP,
       "X-Real-IP": fakeIP,
     },
@@ -27,7 +46,6 @@ async function fetchAPI(path: string): Promise<any> {
   return await res.json();
 }
 
-// ✅ FIX: Fungsi normalizeCard dikembalikan seperti versi Deno yang tahan banting
 const normalizeCard = (item: any) => {
   const d = item.data?.title ? item.data : item.data?.data || item.data || item;
 

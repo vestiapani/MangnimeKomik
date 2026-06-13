@@ -10,6 +10,7 @@ import {
   getChapterDetail,
   searchKomik,
   getGenreList,
+  getKomikByGenre,
 } from "./scraper";
 
 export const config = {
@@ -96,8 +97,22 @@ app.use("/api/*", async (c, next) => {
   await next();
 });
 
-// Helper
-const ok = (c: any, data: unknown) => c.json({ success: true, data });
+// ─── Input Sanitizer (Dibawa dari Deno) ──────────────────────────────────────
+function sanitize(input: string | undefined, maxLength = 100): string {
+  if (!input) return "";
+  return input
+    .trim()
+    .slice(0, maxLength)
+    .replace(/[<>"'`]/g, ""); // Hapus karakter berbahaya
+}
+
+function sanitizePage(raw: string | undefined): number {
+  const n = Number(raw ?? 1);
+  return Math.min(Math.max(Number.isFinite(n) ? n : 1, 1), 500); // Batasi page 1-500
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const ok = (c: any, data: unknown) => c.json({ success: true, data }, 200);
 const err = (c: any, message: string, status = 500) =>
   c.json({ success: false, message }, status);
 
@@ -213,57 +228,96 @@ app.get("/", (c) => {
   return c.html(html);
 });
 
+// ─── ENDPOINTS ────────────────────────────────────────────────────────────────
+
 app.get("/api/home", async (c) => {
   try {
     return ok(c, await getHomeData());
   } catch (e) {
-    console.error("🔴 CRASH DI BACKEND VERCEL:", e);
     return err(c, (e as Error).message);
   }
 });
 
 app.get("/api/latest", async (c) => {
   try {
-    return ok(c, await getLatestKomik(Number(c.req.query("page") || 1)));
+    const page = sanitizePage(c.req.query("page")); // Memakai sanitizer
+    return ok(c, await getLatestKomik(page));
   } catch (e) {
-    console.error("🔴 CRASH DI BACKEND VERCEL:", e);
     return err(c, (e as Error).message);
   }
 });
 
-app.get("/api/komik/:slug", async (c) => {
+app.get("/api/popular", async (c) => {
   try {
-    return ok(c, await getKomikDetail(c.req.param("slug")));
+    const page = sanitizePage(c.req.query("page"));
+    const category = sanitize(c.req.query("category") || "all", 20);
+    return ok(c, await getPopularKomik(page, category));
   } catch (e) {
-    console.error("🔴 CRASH DI BACKEND VERCEL:", e);
-    return err(c, (e as Error).message);
-  }
-});
-
-app.get("/api/komik/:slug/:chapterId", async (c) => {
-  try {
-    return ok(
-      c,
-      await getChapterDetail(c.req.param("slug"), c.req.param("chapterId")),
-    );
-  } catch (e) {
-    console.error("🔴 CRASH DI BACKEND VERCEL:", e);
     return err(c, (e as Error).message);
   }
 });
 
 app.get("/api/advanceSearch", async (c) => {
   try {
-    const q = c.req.query("search") || "";
-    const g = c.req.query("genreIds") || "";
-    const f = c.req.query("format") || "";
-    const p = Number(c.req.query("page") || 1);
-    return ok(c, await searchKomik(q, p, g, f));
+    const search = sanitize(c.req.query("search"), 100);
+    const genreIds = sanitize(c.req.query("genreIds"), 50);
+    const format = sanitize(c.req.query("format"), 20);
+    const page = sanitizePage(c.req.query("page"));
+
+    // Logika pencegat dibawa dari Deno
+    if (!search && !genreIds && !format) {
+      return err(
+        c,
+        "Parameter pencarian wajib diisi (search / genre / format)",
+        400
+      );
+    }
+    
+    return ok(c, await searchKomik(search, page, genreIds, format));
   } catch (e) {
-    console.error("🔴 CRASH DI BACKEND VERCEL:", e);
     return err(c, (e as Error).message);
   }
 });
 
-// Jembatan Hono ke Vercel
+app.get("/api/genres", async (c) => {
+  try {
+    return ok(c, await getGenreList());
+  } catch (e) {
+    return err(c, (e as Error).message);
+  }
+});
+
+// (Rute Baru) Akhirnya getKomikByGenre dipakai!
+app.get("/api/genre/:genreSlug", async (c) => {
+  try {
+    const genreSlug = sanitize(c.req.param("genreSlug"), 100);
+    const page = sanitizePage(c.req.query("page"));
+    return ok(c, await getKomikByGenre(genreSlug, page));
+  } catch (e) {
+    return err(c, (e as Error).message);
+  }
+});
+
+app.get("/api/komik/:slug", async (c) => {
+  try {
+    const slug = sanitize(c.req.param("slug"), 200);
+    return ok(c, await getKomikDetail(slug));
+  } catch (e) {
+    return err(c, (e as Error).message);
+  }
+});
+
+app.get("/api/komik/:slug/:chapterId", async (c) => {
+  try {
+    const slug = sanitize(c.req.param("slug"), 200);
+    const chapterId = sanitize(c.req.param("chapterId"), 100);
+    return ok(c, await getChapterDetail(slug, chapterId));
+  } catch (e) {
+    return err(c, (e as Error).message);
+  }
+});
+
+// Custom 404 Handler agar seragam dengan JSON
+app.notFound((c) => err(c, "Endpoint API tidak ditemukan di Vercel Edge", 404));
+
 export default handle(app);
